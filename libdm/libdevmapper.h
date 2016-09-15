@@ -3331,6 +3331,7 @@ struct dm_config_tree {
 };
 
 struct dm_config_tree *dm_config_create(void);
+struct dm_config_tree *dm_config_create_with_flags(uint64_t flags);
 struct dm_config_tree *dm_config_from_string(const char *config_settings);
 int dm_config_parse(struct dm_config_tree *cft, const char *start, const char *end);
 

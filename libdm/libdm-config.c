@@ -61,6 +61,7 @@ struct config_output {
 
 struct config_wrapper {
 	struct dm_config_tree cft;
+	uint64_t flags;
 };
 
 #define get_config_wrapper(cfg_ptr) \
@@ -100,7 +101,7 @@ static int _tok_match(const char *str, const char *b, const char *e)
 	return !(*str || (b != e));
 }
 
-struct dm_config_tree *dm_config_create(void)
+static struct dm_config_tree *_do_config_create(uint64_t flags)
 {
 	struct config_wrapper *cf_wrapper;
 	struct dm_pool *mem = dm_pool_create("config", 10 * 1024);
@@ -117,8 +118,19 @@ struct dm_config_tree *dm_config_create(void)
 	}
 
 	cf_wrapper->cft.mem = mem;
+	cf_wrapper->flags = flags;
 
 	return &cf_wrapper->cft;
+}
+
+struct dm_config_tree *dm_config_create(void)
+{
+	return _do_config_create(0);
+}
+
+struct dm_config_tree *dm_config_create_with_flags(uint64_t flags)
+{
+	return _do_config_create(flags);
 }
 
 void dm_config_set_custom(struct dm_config_tree *cft, void *custom)
