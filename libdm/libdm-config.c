@@ -59,6 +59,13 @@ struct config_output {
 	void *baton;
 };
 
+struct config_wrapper {
+	struct dm_config_tree cft;
+};
+
+#define get_config_wrapper(cfg_ptr) \
+    ((struct config_wrapper *)((const char *)(cfg_ptr) - (const char *)&((struct config_wrapper *) 0)->cft))
+
 static void _get_token(struct parser *p, int tok_prev);
 static void _eat_space(struct parser *p);
 static struct dm_config_node *_file(struct parser *p);
@@ -95,7 +102,7 @@ static int _tok_match(const char *str, const char *b, const char *e)
 
 struct dm_config_tree *dm_config_create(void)
 {
-	struct dm_config_tree *cft;
+	struct config_wrapper *cf_wrapper;
 	struct dm_pool *mem = dm_pool_create("config", 10 * 1024);
 
 	if (!mem) {
@@ -103,14 +110,15 @@ struct dm_config_tree *dm_config_create(void)
 		return 0;
 	}
 
-	if (!(cft = dm_pool_zalloc(mem, sizeof(*cft)))) {
-		log_error("Failed to allocate config tree.");
+	if (!(cf_wrapper = dm_pool_zalloc(mem, sizeof(*cf_wrapper)))) {
+		log_error("Failed to allocate config wrapper.");
 		dm_pool_destroy(mem);
 		return 0;
 	}
-	cft->mem = mem;
 
-	return cft;
+	cf_wrapper->cft.mem = mem;
+
+	return &cf_wrapper->cft;
 }
 
 void dm_config_set_custom(struct dm_config_tree *cft, void *custom)
