@@ -69,8 +69,8 @@ struct config_wrapper {
 
 static void _get_token(struct parser *p, int tok_prev);
 static void _eat_space(struct parser *p);
-static struct dm_config_node *_file(struct parser *p);
-static struct dm_config_node *_section(struct parser *p, struct dm_config_node *parent);
+static struct dm_config_node *_file(struct config_wrapper *cf_wrapper, struct parser *p);
+static struct dm_config_node *_section(struct config_wrapper *cf_wrapper, struct parser *p, struct dm_config_node *parent);
 static struct dm_config_value *_value(struct parser *p);
 static struct dm_config_value *_type(struct parser *p);
 static int _match_aux(struct parser *p, int t);
@@ -194,6 +194,7 @@ int dm_config_parse(struct dm_config_tree *cft, const char *start, const char *e
 {
 	/* TODO? if (start == end) return 1; */
 
+	struct config_wrapper *cf_wrapper = get_config_wrapper(cft);
 	struct parser *p;
 	if (!(p = dm_pool_alloc(cft->mem, sizeof(*p))))
 		return_0;
@@ -205,7 +206,7 @@ int dm_config_parse(struct dm_config_tree *cft, const char *start, const char *e
 	p->line = 1;
 
 	_get_token(p, TOK_SECTION_E);
-	if (!(cft->root = _file(p)))
+	if (!(cft->root = _file(cf_wrapper, p)))
 		return_0;
 
 	cft->root = _config_reverse(cft->root);
@@ -497,13 +498,14 @@ static char *_dup_string_tok(struct parser *p)
 	return str;
 }
 
-static struct dm_config_node *_file(struct parser *p)
+static struct dm_config_node *_file(struct config_wrapper *cf_wrapper,
+				    struct parser *p)
 {
 	struct dm_config_node root = { 0 };
 	root.key = "<root>";
 
 	while (p->t != TOK_EOF)
-		if (!_section(p, &root))
+		if (!_section(cf_wrapper, p, &root))
 			return_NULL;
 	return root.child;
 }
@@ -528,12 +530,14 @@ static struct dm_config_node *_make_node(struct dm_pool *mem,
 
 /* when mem is not NULL, we create the path if it doesn't exist yet */
 static struct dm_config_node *_find_or_make_node(struct dm_pool *mem,
+						 struct config_wrapper *cf_wrapper,
 						 struct dm_config_node *parent,
 						 const char *path)
 {
 	const char *e;
 	struct dm_config_node *cn = parent ? parent->child : NULL;
 	struct dm_config_node *cn_found = NULL;
+	int no_dup_check = cf_wrapper ? (cf_wrapper->flags & DM_CONFIG_TREE_NO_DUP_NODE_CHECK) : 0;
 
 	while (cn || mem) {
 		/* trim any leading slashes */
@@ -546,18 +550,20 @@ static struct dm_config_node *_find_or_make_node(struct dm_pool *mem,
 		/* hunt for the node */
 		cn_found = NULL;
 
-		while (cn) {
-			if (_tok_match(cn->key, path, e)) {
-				/* Inefficient */
-				if (!cn_found)
-					cn_found = cn;
-				else
-					log_warn("WARNING: Ignoring duplicate"
-						 " config node: %s ("
-						 "seeking %s)", cn->key, path);
-			}
+		if (!no_dup_check) {
+			while (cn) {
+				if (_tok_match(cn->key, path, e)) {
+					/* Inefficient */
+					if (!cn_found)
+						cn_found = cn;
+					else
+						log_warn("WARNING: Ignoring duplicate"
+							 " config node: %s ("
+							 "seeking %s)", cn->key, path);
+				}
 
-			cn = cn->sib;
+				cn = cn->sib;
+			}
 		}
 
 		if (!cn_found && mem) {
@@ -576,7 +582,9 @@ static struct dm_config_node *_find_or_make_node(struct dm_pool *mem,
 	return NULL;
 }
 
-static struct dm_config_node *_section(struct parser *p, struct dm_config_node *parent)
+static struct dm_config_node *_section(struct config_wrapper *cf_wrapper,
+				       struct parser *p,
+				       struct dm_config_node *parent)
 {
 	/* IDENTIFIER SECTION_B_CHAR VALUE* SECTION_E_CHAR */
 
@@ -608,13 +616,13 @@ static struct dm_config_node *_section(struct parser *p, struct dm_config_node *
 		return NULL;
 	}
 
-	if (!(root = _find_or_make_node(p->mem, parent, str)))
+	if (!(root = _find_or_make_node(p->mem, cf_wrapper, parent, str)))
 		return_NULL;
 
 	if (p->t == TOK_SECTION_B) {
 		match(TOK_SECTION_B);
 		while (p->t != TOK_SECTION_E) {
-			if (!(_section(p, root)))
+			if (!(_section(cf_wrapper, p, root)))
 				return_NULL;
 		}
 		match(TOK_SECTION_E);
@@ -932,7 +940,7 @@ typedef const struct dm_config_node *node_lookup_fn(const void *start, const cha
 
 static const struct dm_config_node *_find_config_node(const void *start, const char *path) {
 	struct dm_config_node dummy = { .child = (void *) start };
-	return _find_or_make_node(NULL, &dummy, path);
+	return _find_or_make_node(NULL, NULL, &dummy, path);
 }
 
 static const struct dm_config_node *_find_first_config_node(const void *start, const char *path)
@@ -1415,7 +1423,7 @@ static int _override_path(const char *path, struct dm_config_node *node, void *b
 	struct dm_config_tree *cft = baton;
 	struct dm_config_node dummy, *target;
 	dummy.child = cft->root;
-	if (!(target = _find_or_make_node(cft->mem, &dummy, path)))
+	if (!(target = _find_or_make_node(cft->mem, NULL, &dummy, path)))
 		return_0;
 	if (!(target->v = _clone_config_value(cft->mem, node->v)))
 		return_0;

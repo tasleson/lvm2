@@ -3330,6 +3330,8 @@ struct dm_config_tree {
 	void *custom;
 };
 
+#define DM_CONFIG_TREE_NO_DUP_NODE_CHECK 0x0000000000000001
+
 struct dm_config_tree *dm_config_create(void);
 struct dm_config_tree *dm_config_create_with_flags(uint64_t flags);
 struct dm_config_tree *dm_config_from_string(const char *config_settings);
