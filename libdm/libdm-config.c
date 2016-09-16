@@ -616,7 +616,7 @@ static struct dm_config_node *_section(struct config_wrapper *cf_wrapper,
 		return NULL;
 	}
 
-	if (!(root = _find_or_make_node(p->mem, cf_wrapper, parent, str)))
+	if (!(root = _find_or_make_node(cf_wrapper->cft.mem, cf_wrapper, parent, str)))
 		return_NULL;
 
 	if (p->t == TOK_SECTION_B) {
