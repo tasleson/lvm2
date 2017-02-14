@@ -454,16 +454,39 @@ DESC: Convert LV to type thin-pool.
 RULE: all and lv_is_visible
 RULE: all not lv_is_locked lv_is_origin lv_is_merging_origin lv_is_external_origin lv_is_virtual
 
-# alternate form of lvconvert --type thin-pool
-# deprecated because of non-standard syntax (missing positional arg)
-# Commands in this form are converted to standard form so that
-# the validation of LV types and rules specified above will apply.
-lvconvert --thinpool LV_linear_striped_raid_cache
+# This command syntax has two different meanings depending on
+# whether the LV pos arg is already a thinpool or not.
+#
+# 1. When the LV arg is not a pool, this command converts
+# the LV into a pool, optionally using a specified meta LV.
+# Creating a pool is a routine operation.
+# This is an alternate form of the primary command:
+# lvconvert --type thin-pool LV
+#
+# 2. When the LV is is already a pool and a meta LV is specified,
+# the meta LV is swapped.  Swapping a meta LV is a very specialized
+# operation that users should never use.
+# This is an alternate form of the primary command:
+# lvconvert --swapmetadata --poolmetadata LV LV
+#
+# The command def cannot include --poolmetadata as a required
+# option, otherwise 1 would not pass, so the validation of
+# this option cannot be done by the command defs, but has to
+# be done ad hoc in the lvconvert implementation.
+#
+# Giving these two very different operations the identical syntax
+# is dangerously confusing.
+#
+# This command syntax is deprecated in general, for any purpose,
+# because of non-standard syntax (missing positional arg)
+#
+lvconvert --thinpool LV_linear_striped_raid_cache_thinpool
 OO: --type thin-pool, --stripes_long Number, --stripesize SizeKB,
 --discards Discards, --zero Bool, OO_LVCONVERT_POOL, OO_LVCONVERT
 OP: PV ...
-ID: lvconvert_to_thinpool_noarg
+ID: lvconvert_to_thinpool_or_swap_metadata
 DESC: Convert LV to type thin-pool (variant, use --type thin-pool).
+DESC: Swap metadata LV in a thin pool (variant, use --swapmetadata).
 FLAGS: SECONDARY_SYNTAX
 
 ---
@@ -475,16 +498,39 @@ OP: PV ...
 ID: lvconvert_to_cachepool
 DESC: Convert LV to type cache-pool.
 
-# alternate form of lvconvert --type cache-pool
-# deprecated because of non-standard syntax (missing positional arg)
-# Commands in this form are converted to standard form so that
-# the validation of LV types and rules specified above will apply.
-lvconvert --cachepool LV_linear_striped_raid
+# This command syntax has two different meanings depending on
+# whether the LV pos arg is already a cachepool or not.
+#
+# 1. When the LV arg is not a pool, this command converts
+# the LV into a pool, optionally using a specified meta LV.
+# Creating a pool is a routine operation.
+# This is an alternate form of the primary command:
+# lvconvert --type cache-pool LV
+#
+# 2. When the LV is is already a pool and a meta LV is specified,
+# the meta LV is swapped.  Swapping a meta LV is a very specialized
+# operation that users should never use.
+# This is an alternate form of the primary command:
+# lvconvert --swapmetadata --poolmetadata LV LV
+#
+# The command def cannot include --poolmetadata as a required
+# option, otherwise 1 would not pass, so the validation of
+# this option cannot be done by the command defs, but has to
+# be done ad hoc in the lvconvert implementation.
+#
+# Giving these two very different operations the identical syntax
+# is dangerously confusing.
+#
+# This command syntax is deprecated in general, for any purpose,
+# because of non-standard syntax (missing positional arg)
+#
+lvconvert --cachepool LV_linear_striped_raid_cachepool
 OO: --type cache-pool, OO_LVCONVERT_POOL, OO_LVCONVERT,
 --cachemode CacheMode, --cachepolicy String, --cachesettings String
 OP: PV ...
-ID: lvconvert_to_cachepool_noarg
+ID: lvconvert_to_cachepool_or_swap_metadata
 DESC: Convert LV to type cache-pool (variant, use --type cache-pool).
+DESC: Swap metadata LV in a cache pool (variant, use --swapmetadata).
 FLAGS: SECONDARY_SYNTAX
 
 ---
@@ -507,20 +553,6 @@ lvconvert --swapmetadata --poolmetadata LV LV_thinpool_cachepool
 OO: --chunksize SizeKB, OO_LVCONVERT
 ID: lvconvert_swap_pool_metadata
 DESC: Swap metadata LV in a thin pool or cache pool (for repair only).
-
-lvconvert --poolmetadata LV --thinpool LV_thinpool
-OO: --chunksize SizeKB, OO_LVCONVERT
-ID: lvconvert_swap_thinpool_metadata
-DESC: Swap metadata LV in a thin pool (for repair only).
-DESC: (variant, use --swapmetadata).
-FLAGS: SECONDARY_SYNTAX
-
-lvconvert --poolmetadata LV --cachepool LV_cachepool
-OO: --chunksize SizeKB, OO_LVCONVERT
-ID: lvconvert_swap_cachepool_metadata
-DESC: Swap metadata LV in a cache pool (for repair only).
-DESC: (variant, use --swapmetadata).
-FLAGS: SECONDARY_SYNTAX
 
 ---
 
