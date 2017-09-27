@@ -63,6 +63,24 @@ def check_bb_size(value):
 	return v
 
 
+def install_signal_handlers():
+	# Because of the glib main loop stuff the python signal handler code is
+	# apparently not usable and we need to use the glib calls instead
+	signal_add = None
+
+	if hasattr(GLib, 'unix_signal_add'):
+		signal_add = GLib.unix_signal_add
+	elif hasattr(GLib, 'unix_signal_add_full'):
+		signal_add = GLib.unix_signal_add_full
+
+	if signal_add:
+		signal_add(GLib.PRIORITY_HIGH, signal.SIGHUP, utils.handler, signal.SIGHUP)
+		signal_add(GLib.PRIORITY_HIGH, signal.SIGINT, utils.handler, signal.SIGINT)
+		signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1, utils.handler, signal.SIGUSR1)
+	else:
+		log_error("GLib.unix_signal_[add|add_full] are NOT available!")
+
+
 def main():
 	start = time.time()
 	# Add simple command line handling
@@ -112,12 +130,7 @@ def main():
 	# List of threads that we start up
 	thread_list = []
 
-	# Install signal handlers
-	for s in [signal.SIGHUP, signal.SIGINT]:
-		try:
-			signal.signal(s, utils.handler)
-		except RuntimeError:
-			pass
+	install_signal_handlers()
 
 	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 	dbus.mainloop.glib.threads_init()
@@ -138,7 +151,8 @@ def main():
 
 	# Using a thread to process requests, we cannot hang the dbus library
 	# thread that is handling the dbus interface
-	thread_list.append(threading.Thread(target=process_request))
+	thread_list.append(threading.Thread(target=process_request,
+										name='process_request'))
 
 	# Have a single thread handling updating lvm and the dbus model so we
 	# don't have multiple threads doing this as the same time
@@ -176,5 +190,7 @@ def main():
 			for thread in thread_list:
 				thread.join()
 	except KeyboardInterrupt:
-		utils.handler(signal.SIGINT, None)
+		# If we are unable to register signal handler, we will end up here when
+		# the service gets a ^C or a kill -2 <parent pid>
+		utils.handler(signal.SIGINT)
 	return 0
