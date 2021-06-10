@@ -14,9 +14,13 @@ from collections import OrderedDict
 import pprint as prettyprint
 import os
 import sys
+import json
 
 from lvmdbusd import cmdhandler
 from lvmdbusd.utils import log_debug, log_error
+
+REPLAY_FILE_NUM = 0
+REPLAY_DIR = os.getenv("LVMDBUSD_REPLAY", "/")
 
 
 class DataStore(object):
@@ -402,8 +406,18 @@ class DataStore(object):
 
 		# Grab everything first then parse it
 		if self.json:
-			# Do a single lvm retrieve for everything in json
-			a = cmdhandler.lvm_full_report_json()
+			global REPLAY_FILE_NUM
+			if REPLAY_DIR != "/":
+				fn = "%s/%d.json" % (REPLAY_DIR, REPLAY_FILE_NUM)
+				with open(fn, "r") as j:
+					json_data = j.read()
+
+				a = json.loads(json_data)
+				log_debug("Using flight recorder json file %s" % fn)
+				REPLAY_FILE_NUM += 1
+			else:
+				# Do a single lvm retrieve for everything in json
+				a = cmdhandler.lvm_full_report_json()
 
 			_pvs, _pvs_lookup, _pvs_in_vgs = self._parse_pvs_json(a)
 			_vgs, _vgs_lookup = self._parse_vgs_json(a)
