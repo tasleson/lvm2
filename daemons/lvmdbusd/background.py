@@ -13,8 +13,10 @@ from .cmdhandler import options_to_cli_args, LvmExecutionMeta, call_lvm
 import dbus
 from .utils import pv_range_append, pv_dest_ranges, log_error, log_debug,\
 					mt_async_call
+from .request import RequestEntry
 import threading
 import time
+import traceback
 
 
 def pv_move_lv_cmd(move_options, lv_full_name,
@@ -38,11 +40,8 @@ def lv_merge_cmd(merge_options, lv_full_name):
 	return cmd
 
 
-# We are already called in main thread context, so we don't need to have the
-# load being done again in main thread, in fact it will hang if you do so.
-# Call cfg.load specifying no main thread execution.
 def _load_wrapper(ignored):
-	cfg.load(need_main_thread=False)
+	cfg.load()
 
 
 def _move_callback(job_state, line_str):
@@ -55,9 +54,10 @@ def _move_callback(job_state, line_str):
 
 			# While the move is in progress we need to periodically update
 			# the state to reflect where everything is at.  we will do this
-			# by scheduling the load to occur on the main thread so that we
-			# don't block the execution of this function.
-			mt_async_call(_load_wrapper, None)
+			# by scheduling the load to occur in the main work queue.
+			r = RequestEntry(
+				-1, _load_wrapper, ("_move_callback: load",), None, None, False)
+			cfg.worker_q.put(r)
 	except ValueError:
 		log_error("Trying to parse percentage which failed for %s" % line_str)
 
