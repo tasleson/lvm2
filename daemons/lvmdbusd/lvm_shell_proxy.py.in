@@ -58,7 +58,15 @@ class LVMShellProxy(object):
 		# Try reading from all FDs to prevent one from filling up and causing
 		# a hang.  Keep reading until we get the prompt back and the report
 		# FD does not contain valid JSON
+
+		start = time.time()
+
 		while keep_reading:
+
+			if self.started == False:
+				if time.time() - start > 10:
+					raise Exception("lvm not responding ...")
+
 			try:
 				rd_fd = [
 					self.lvm_shell.stdout.fileno(),
@@ -109,6 +117,7 @@ class LVMShellProxy(object):
 				log_debug(str(ioe))
 				pass
 
+		self.started = True
 		return stdout, report_json, stderr
 
 	def _write_cmd(self, cmd):
@@ -118,6 +127,8 @@ class LVMShellProxy(object):
 		self.lvm_shell.stdin.flush()
 
 	def __init__(self):
+
+		self.started = False
 
 		# Create a temp directory
 		tmp_dir = tempfile.mkdtemp(prefix="lvmdbus_")
