@@ -7,11 +7,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+# NOTE: We cannot reference other code within lvmdbusd, otherwise we get a
+# circular reference, path is an exception to this as it's one line with
+# no dependencies.
+
 import os
 import multiprocessing
 import queue
 import itertools
-from lvmdbusd.utils import LvmDebugData
 
 from lvmdbusd import path
 
@@ -19,9 +22,8 @@ LVM_CMD = os.getenv('LVM_BINARY', path.LVM_BINARY)
 
 LOCK_FILE = os.getenv("LVM_DBUSD_LOCKFILE", "/var/lock/lvm/lvmdbusd")
 
-# Save off the debug data needed for lvm team to debug issues
-# only used for 'fullreport' at this time.
-lvmdebug = LvmDebugData(os.getenv('LVM_DBUSD_COLLECT_LVM_DEBUG', False))
+# See main.py for initialization
+lvmdebug = None
 
 # This is the global object manager
 om = None

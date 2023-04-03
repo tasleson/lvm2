@@ -154,6 +154,10 @@ def main():
 	os.environ["LC_ALL"] = "C"
 	os.environ["LVM_COMMAND_PROFILE"] = "lvmdbusd"
 
+	# Save off the debug data needed for lvm team to debug issues
+	# only used for 'fullreport' at this time.
+	cfg.lvmdebug = utils.LvmDebugData(os.getenv('LVM_DBUSD_COLLECT_LVM_DEBUG', False))
+
 	# Indicator if we are running under systemd
 	cfg.systemd = running_under_systemd()
 

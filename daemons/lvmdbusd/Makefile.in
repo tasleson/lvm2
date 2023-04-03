@@ -27,6 +27,7 @@ LVMDBUS_SRCDIR_FILES = \
 	job.py \
 	loader.py \
 	lv.py \
+	lvmdb.py \
 	main.py \
 	manager.py \
 	objectmanager.py \
@@ -39,7 +40,6 @@ LVMDBUS_SRCDIR_FILES = \
 	__init__.py
 
 LVMDBUS_BUILDDIR_FILES = \
-	lvmdb.py \
 	lvm_shell_proxy.py \
 	path.py
 

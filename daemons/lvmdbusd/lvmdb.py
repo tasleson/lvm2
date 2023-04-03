@@ -1,5 +1,3 @@
-#!@PYTHON3@
-
 # Copyright (C) 2015-2016 Red Hat, Inc. All rights reserved.
 #
 # This copyrighted material is made available to anyone wishing to use,
@@ -11,7 +9,6 @@
 
 from collections import OrderedDict
 
-import pprint as prettyprint
 import os
 
 from lvmdbusd import cmdhandler
@@ -434,43 +431,3 @@ class DataStore(object):
 		if lv_uuid in self.lvs_hidden:
 			rc = self.lvs_hidden[lv_uuid]
 		return rc
-
-
-if __name__ == "__main__":
-	os.environ["LC_ALL"] = "C"
-	os.environ["LVM_COMMAND_PROFILE"] = "lvmdbusd"
-	pp = prettyprint.PrettyPrinter(indent=4)
-
-	ds = DataStore()
-	ds.refresh()
-
-	print("PVS")
-	for v in ds.pvs.values():
-		pp.pprint(v)
-		print('PV missing is %s' % ds.pv_missing(v['pv_uuid']))
-
-	print("VGS")
-	for v in ds.vgs.values():
-		pp.pprint(v)
-
-	print("VG name to UUID")
-	for k, v in ds.vg_name_to_uuid.items():
-		print("%s: %s" % (k, v))
-
-	print("LVS")
-	for v in ds.lvs.values():
-		pp.pprint(v)
-
-	print("LVS in VG")
-	for k, v in ds.lvs_in_vgs.items():
-		print("VG uuid = %s" % (k))
-		pp.pprint(v)
-
-	print("pv_in_lvs")
-	for k, v in ds.pv_lvs.items():
-		print("PV %s contains LVS:" % (k))
-		pp.pprint(v)
-
-	for k, v in ds.lv_pvs.items():
-		print("LV device = %s" % (k))
-		pp.pprint(v)

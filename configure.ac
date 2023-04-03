@@ -1946,7 +1946,6 @@ daemons/dmeventd/plugins/thin/Makefile
 daemons/dmeventd/plugins/vdo/Makefile
 daemons/lvmdbusd/Makefile
 daemons/lvmdbusd/lvmdbusd
-daemons/lvmdbusd/lvmdb.py
 daemons/lvmdbusd/lvm_shell_proxy.py
 daemons/lvmdbusd/path.py
 daemons/lvmpolld/Makefile
