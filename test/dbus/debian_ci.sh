@@ -2,6 +2,10 @@
 
 # Run unit tests for lvmdbusd on ubuntu/debian
 
+echo "-------"
+lsb_release -a
+echo "-------"
+
 export DEBIAN_FRONTEND="noninteractive"
 apt-get update -y -q || exit 1
 
@@ -11,7 +15,10 @@ apt-get install debhelper-compat autoconf-archive automake libaio-dev libblkid-d
 	libcpg-dev  libdlm-dev libdlmcontrol-dev  libedit-dev libquorum-dev  libsanlock-dev  libselinux1-dev \
 	libsystemd-dev  libudev-dev -y -q || exit 1
 
-./configure --enable-dbus-service --enable-notify-dbus --enable-editline || exit 1
+./configure --enable-udev_sync --with-device-uid=0 --with-device-gid=6 --with-device-mode=0660 \
+	--enable-pkgconfig -enable-cmdlib --enable-dbus-service --enable-notify-dbus --enable-editline \
+	--with-thin=internal --with-cache=internal 	|| exit 1
+
 
 make -j12 || exit 1
 
@@ -37,4 +44,5 @@ python3 daemons/lvmdbusd/lvmdbusd 2>&1 >> /tmp/lvmdbusd.out.txt &
 
 sleep 10
 
-test/dbus/lvmdbustest.py -v || { echo /tmp/lvmdbusd.out ; exit 1;}
+#test/dbus/lvmdbustest.py -v -f TestDbusService.test_cache_lv_rename || { echo "Unit test failed, check artifacts" ; exit 1;}
+test/dbus/lvmdbustest.py -v -f || { echo "Unit test failed, check artifacts" ; exit 1;}
