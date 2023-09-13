@@ -431,3 +431,4 @@ class DataStore(object):
 		if lv_uuid in self.lvs_hidden:
 			rc = self.lvs_hidden[lv_uuid]
 		return rc
+
