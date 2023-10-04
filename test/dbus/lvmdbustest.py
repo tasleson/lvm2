@@ -2069,7 +2069,7 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _scan_lvs_enabled():
-		cmd = ['lvmconfig',  '--typeconfig', 'full', 'devices/scan_lvs']
+		cmd = [LVM_EXECUTABLE, 'lvmconfig',  '--typeconfig', 'full', 'devices/scan_lvs']
 		config = Popen(cmd, stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
 		out = config.communicate()
 		if config.returncode != 0:
@@ -2116,6 +2116,9 @@ class TestDbusService(unittest.TestCase):
 
 		if not pv_device_path.startswith("/dev"):
 			raise unittest.SkipTest('test not running in /dev')
+
+		if  pv_device_path.startswith("/dev/loop"):
+			raise unittest.SkipTest('not running test against loopback devices')
 
 		self._pv_remove(pv)
 
