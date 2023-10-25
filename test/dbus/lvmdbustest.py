@@ -96,7 +96,7 @@ def _is_testsuite_pv(pv_name):
 
 
 def is_nested_pv(pv_name):
-	return pv_name.count('/') == 3 and not _is_testsuite_pv(pv_name)
+	return "nest_" in pv_name and not _is_testsuite_pv(pv_name)
 
 
 def _root_pv_name(res, pv_name):
