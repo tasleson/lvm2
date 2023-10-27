@@ -40,7 +40,8 @@ $LVM_BINARY pvcreate $dev2 || exit 1
 dev3=`losetup -f --show /d3.disk`
 $LVM_BINARY pvcreate $dev3 || exit 1
 
-python3 daemons/lvmdbusd/lvmdbusd 2>&1 >> /tmp/lvmdbusd.out.txt &
+chmod +x daemons/lvmdbusd/lvmdbusd || exit 1
+daemons/lvmdbusd/lvmdbusd 2>&1 >> /tmp/lvmdbusd.out.txt &
 
 sleep 10
 
