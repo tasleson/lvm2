@@ -68,6 +68,12 @@ def known_device(udev_entry):
 	return False
 
 
+def incomplete_devlinks(udev_entry):
+	if 'DEVLINKS' in udev_entry and udev_entry['DEVLINKS'] == "/dev/disk/by-id/dm-name-":
+		return True
+	return False
+
+
 # noinspection PyUnusedLocal
 def filter_event(action, device):
 	# Filter for events of interest and add a request object to be processed
@@ -97,6 +103,11 @@ def filter_event(action, device):
 
 	if refresh:
 		udev_add()
+	else:
+		# This logic handles the case where lvmdbusd is running with device nodes outside /dev.
+		if 'DEVNAME' in device and device['DEVNAME'].startswith("/dev/dm-") and not "DM_LV_LAYER" in device \
+			and not "DM_UDEV_DISABLE_SUBSYSTEM_RULES_FLAG" in device and not incomplete_devlinks(device):
+			udev_add()
 
 
 def add():
