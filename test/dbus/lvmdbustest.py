@@ -2437,11 +2437,14 @@ class TestDbusService(unittest.TestCase):
 			print("Note: Time for udev update = %f" % (time.time() - start))
 		if present:
 			rc = self._lookup(block_device)
-			self.assertNotEqual(rc, '/', "Daemon failed to update, missing udev change event?")
+			self.assertNotEqual(rc, '/', f"Daemon failed to update, block device{block_device} expecting to be"
+										 f"present, missing udev change event?")
 			return True
 		else:
 			rc = self._lookup(block_device)
-			self.assertEqual(rc, '/', "Daemon failed to update, missing udev change event?")
+			self.assertEqual(rc, '/',
+							 f"Daemon failed to update, block device {block_device} should be absent,"
+							 f"missing udev change event?")
 			return True
 
 	def test_udev_wipefs(self):
