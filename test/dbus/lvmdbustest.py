@@ -2102,6 +2102,23 @@ class TestDbusService(unittest.TestCase):
 		for i in range(0, 5):
 			pv_object_path = self._create_nested(pv_object_path, "nest_%d_" % i)
 
+	def test_udev_nested_signature_remove(self):
+		if not TestDbusService._scan_lvs_enabled():
+			raise unittest.SkipTest('scan_lvs=0 in config, unit test requires scan_lvs=1')
+		pv_object_path = self.objs[PV_INT][0].object_path
+		if not self.objs[PV_INT][0].Pv.Name.startswith("/dev"):
+			raise unittest.SkipTest('test not running in /dev')
+
+		pv_object_path = self._create_nested(pv_object_path, "nest_0_")
+		pobj = ClientProxy(self.bus, pv_object_path, interfaces=(PV_INT,))
+		pv_device_path = pobj.Pv.Name
+
+		existing = TestDbusService._write_signature(pv_device_path, None)
+		if self._block_present_absent(pv_device_path, False):
+			TestDbusService._write_signature(pv_device_path, existing)
+			self._block_present_absent(pv_device_path, True)
+
+
 	def test_pv_symlinks(self):
 		# Let's take one of our test PVs, pvremove it, find a symlink to it
 		# and re-create using the symlink to ensure we return an object
@@ -2411,7 +2428,12 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _wipe_it(block_device):
-		cmd = ["/usr/sbin/wipefs", '-a', block_device]
+		udev_dev = TestDbusService.device_within_devtree(block_device)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		cmd = ["/usr/sbin/wipefs", '-a', udev_dev]
 		config = Popen(cmd, stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
 		config.communicate()
 		if config.returncode != 0:
@@ -2447,12 +2469,36 @@ class TestDbusService(unittest.TestCase):
 							 f"missing udev change event?")
 			return True
 
+
+	@staticmethod
+	def major_minor(device):
+		s = os.lstat(os.path.realpath(device))
+		return os.major(s.st_rdev), os.minor(s.st_rdev)
+
+
+	@staticmethod
+	def device_within_devtree(device):
+		if device.startswith("/dev"):
+			return device
+		in_maj, in_min = TestDbusService.major_minor(device)
+		potential = f"/dev/dm-{in_min}"
+		out_maj, out_min = TestDbusService.major_minor(potential)
+		if in_maj == out_maj and in_min == out_min:
+			return potential
+		return None
+
+
 	def test_udev_wipefs(self):
 		# Ensure we update the status of the daemon if an external process clears a PV
 		pv = self.objs[PV_INT][0]
 		pv_device_path = pv.Pv.Name
 
-		wipe_result = TestDbusService._wipe_it(pv_device_path)
+		udev_dev = TestDbusService.device_within_devtree(pv_device_path)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		wipe_result = TestDbusService._wipe_it(udev_dev)
 		self.assertTrue(wipe_result)
 
 		if wipe_result:
@@ -2465,7 +2511,12 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _write_signature(device, data=None):
-		fd = os.open(device, os.O_RDWR|os.O_EXCL|os.O_NONBLOCK)
+		udev_dev = TestDbusService.device_within_devtree(device)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		fd = os.open(udev_dev, os.O_RDWR|os.O_EXCL|os.O_NONBLOCK)
 		existing = os.read(fd, 1024)
 		os.lseek(fd, 0, os.SEEK_SET)
 
