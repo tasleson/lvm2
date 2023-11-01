@@ -2000,7 +2000,7 @@ class TestDbusService(unittest.TestCase):
 				(operation, stdout, stderr))
 			self.assertTrue(ec == 0, "%s exit code = %d" % (operation, ec))
 
-	def test_external_vg_create(self):
+	def test_udev_external_vg_create(self):
 		# We need to ensure that if a user creates something outside lvm
 		# dbus service that things are sequenced correctly so that if a dbus
 		# user calls into the service they will find the same information.
@@ -2013,7 +2013,7 @@ class TestDbusService(unittest.TestCase):
 		cmd.extend(pv_device_paths)
 		self._verify_existence(cmd, cmd[0], vg_name)
 
-	def test_external_lv_create(self):
+	def test_udev_external_lv_create(self):
 		# Let's create a LV outside of service and see if we correctly handle
 		# its inclusion
 		vg = self._vg_create().Vg
@@ -2023,7 +2023,7 @@ class TestDbusService(unittest.TestCase):
 		cmd = ['lvcreate', '-L4M', '-n', lv_name, vg.Name]
 		self._verify_existence(cmd, cmd[0], full_name)
 
-	def test_external_pv_create(self):
+	def test_udev_external_pv_create(self):
 		# Let's create a PV outside of service and see if we correctly handle
 		# its inclusion
 		target = self.objs[PV_INT][0]
@@ -2444,7 +2444,7 @@ class TestDbusService(unittest.TestCase):
 			self.assertEqual(rc, '/', "Daemon failed to update, missing udev change event?")
 			return True
 
-	def test_wipefs(self):
+	def test_udev_wipefs(self):
 		# Ensure we update the status of the daemon if an external process clears a PV
 		pv = self.objs[PV_INT][0]
 		pv_device_path = pv.Pv.Name
@@ -2477,7 +2477,7 @@ class TestDbusService(unittest.TestCase):
 		os.close(fd)
 		return existing
 
-	def test_copy_signature(self):
+	def test_udev_copy_signature(self):
 		# Ensure we update the state of the daemon if an external process copies
 		# a pv signature onto a block device
 		pv = self.objs[PV_INT][0]
