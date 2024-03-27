@@ -46,6 +46,34 @@ def _udev_event():
 	cfg.load()
 
 
+def known_device(udev_entry):
+	# All of these look-ups are all very
+	# fast as everything is done in memory with O(1) lookup
+	#
+	# Note: LVM is using a loopback
+	# device and segments it with a number of linear device mapper targets
+	# for testing.  The device['DEVNAME'] refers to /dev/dm-N and not the PV path we
+	# know about, eg. /dev/mapper/LVMTEST481999pv1 which is a symlink returned by lvm.
+	# So we don't have the device in our in memory db, and we don't refresh.  To address
+	# this we leverage the device['DEVLINKS'] which includes multiple alias's for the
+	# device which includes one that we should know about.
+	if 'DEVNAME' in udev_entry:
+		if cfg.om.get_object_by_lvm_id(udev_entry['DEVNAME']):
+			return True
+	if 'DEVLINKS' in udev_entry:
+		entries = udev_entry['DEVLINKS'].split()
+		for e in entries:
+			if cfg.om.get_object_by_lvm_id(e):
+				return True
+	return False
+
+
+def incomplete_devlinks(udev_entry):
+	if 'DEVLINKS' in udev_entry and udev_entry['DEVLINKS'] == "/dev/disk/by-id/dm-name-":
+		return True
+	return False
+
+
 # noinspection PyUnusedLocal
 def filter_event(action, device):
 	# Filter for events of interest and add a request object to be processed
@@ -64,21 +92,22 @@ def filter_event(action, device):
 			# would handle with the dbus notification or something
 			# copied a pv signature onto a block device, this is
 			# required to catch the latter.
-			if not cfg.om.get_object_by_lvm_id(device['DEVNAME']):
+			if not known_device(device):
 				refresh = True
 		elif fs_type_new == '':
 			# Check to see if the device was one we knew about
-			if 'DEVNAME' in device:
-				if cfg.om.get_object_by_lvm_id(device['DEVNAME']):
-					refresh = True
+			refresh = known_device(device)
 	else:
 		# This handles the wipefs -a path
-		if not refresh and 'DEVNAME' in device:
-			if cfg.om.get_object_by_lvm_id(device['DEVNAME']):
-				refresh = True
+		refresh = known_device(device)
 
 	if refresh:
 		udev_add()
+	else:
+		# This logic handles the case where lvmdbusd is running with device nodes outside /dev.
+		if 'DEVNAME' in device and device['DEVNAME'].startswith("/dev/dm-") and not "DM_LV_LAYER" in device \
+			and not "DM_UDEV_DISABLE_SUBSYSTEM_RULES_FLAG" in device and not incomplete_devlinks(device):
+			udev_add()
 
 
 def add():

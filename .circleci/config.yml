@@ -1,0 +1,12 @@
+version: 2.1
+jobs:
+  build:
+    machine:
+      image: ubuntu-2204:2023.04.2
+    steps:
+      - checkout
+      - run:
+          name: "Test lvmdbusd"
+          command: sudo test/dbus/debian_ci.sh
+      - store_artifacts:
+          path: /tmp/lvmdbusd.out.txt

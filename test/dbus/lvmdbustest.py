@@ -68,6 +68,22 @@ if use_session:
 else:
 	bus = dbus.SystemBus(mainloop=DBusGMainLoop())
 
+
+def supports_vdo():
+	cmd = ['segtypes']
+	modprobe = Popen(["modprobe", "kvdo"], stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
+	modprobe.communicate()
+	if modprobe.returncode != 0:
+		return False
+	rc, out, err = call_lvm(cmd)
+	if rc != 0 or "vdo" not in out:
+		return False
+	return True
+
+
+VDO = supports_vdo()
+
+
 # If we have multiple clients we will globally disable introspection
 # validation to limit the massive amount of introspection calls we make as
 # that method prevents things from executing concurrently
@@ -96,7 +112,7 @@ def _is_testsuite_pv(pv_name):
 
 
 def is_nested_pv(pv_name):
-	return pv_name.count('/') == 3 and not _is_testsuite_pv(pv_name)
+	return "nest_" in pv_name and not _is_testsuite_pv(pv_name)
 
 
 def _root_pv_name(res, pv_name):
@@ -212,18 +228,6 @@ def call_lvm(command):
 	stdout_text = bytes(out[0]).decode("utf-8")
 	stderr_text = bytes(out[1]).decode("utf-8")
 	return process.returncode, stdout_text, stderr_text
-
-
-def supports_vdo():
-	cmd = ['segtypes']
-	modprobe = Popen(["modprobe", "kvdo"], stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
-	modprobe.communicate()
-	if modprobe.returncode != 0:
-		return False
-	rc, out, err = call_lvm(cmd)
-	if rc != 0 or "vdo" not in out:
-		return False
-	return True
 
 
 def process_exists(name):
@@ -347,7 +351,7 @@ class DaemonInfo(object):
 		start = time.time()
 		pid = process_exists(EXE_NAME)
 		while pid is not None and (time.time() - start) <= 20:
-			time.sleep(0.3)
+			time.sleep(0.1)
 			pid = process_exists(EXE_NAME)
 
 		if pid:
@@ -364,7 +368,7 @@ class DaemonInfo(object):
 				running = True
 				break
 			except dbus.exceptions.DBusException:
-				time.sleep(0.2)
+				time.sleep(0.1)
 				pass
 		if not running:
 			raise RuntimeError(msg)
@@ -426,7 +430,7 @@ class TestDbusService(unittest.TestCase):
 
 		self.addCleanup(self.clean_up)
 
-		self.vdo = supports_vdo()
+		self.vdo = VDO
 		remove_lvm_debug()
 
 	def _recurse_vg_delete(self, vg_proxy, pv_proxy, nested_pv_hash):
@@ -1387,7 +1391,7 @@ class TestDbusService(unittest.TestCase):
 				return
 
 		# This may not pass
-		for i in [128, 256]:
+		for i in [256, 384]:
 			yes = self._test_expired_timer(i)
 			if yes:
 				break
@@ -2000,7 +2004,7 @@ class TestDbusService(unittest.TestCase):
 				(operation, stdout, stderr))
 			self.assertTrue(ec == 0, "%s exit code = %d" % (operation, ec))
 
-	def test_external_vg_create(self):
+	def test_udev_external_vg_create(self):
 		# We need to ensure that if a user creates something outside lvm
 		# dbus service that things are sequenced correctly so that if a dbus
 		# user calls into the service they will find the same information.
@@ -2013,7 +2017,7 @@ class TestDbusService(unittest.TestCase):
 		cmd.extend(pv_device_paths)
 		self._verify_existence(cmd, cmd[0], vg_name)
 
-	def test_external_lv_create(self):
+	def test_udev_external_lv_create(self):
 		# Let's create a LV outside of service and see if we correctly handle
 		# its inclusion
 		vg = self._vg_create().Vg
@@ -2023,7 +2027,7 @@ class TestDbusService(unittest.TestCase):
 		cmd = ['lvcreate', '-L4M', '-n', lv_name, vg.Name]
 		self._verify_existence(cmd, cmd[0], full_name)
 
-	def test_external_pv_create(self):
+	def test_udev_external_pv_create(self):
 		# Let's create a PV outside of service and see if we correctly handle
 		# its inclusion
 		target = self.objs[PV_INT][0]
@@ -2071,7 +2075,7 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _scan_lvs_enabled():
-		cmd = ['lvmconfig',  '--typeconfig', 'full', 'devices/scan_lvs']
+		cmd = [LVM_EXECUTABLE, 'lvmconfig',  '--typeconfig', 'full', 'devices/scan_lvs']
 		config = Popen(cmd, stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
 		out = config.communicate()
 		if config.returncode != 0:
@@ -2102,6 +2106,23 @@ class TestDbusService(unittest.TestCase):
 		for i in range(0, 5):
 			pv_object_path = self._create_nested(pv_object_path, "nest_%d_" % i)
 
+	def test_udev_nested_signature_remove(self):
+		if not TestDbusService._scan_lvs_enabled():
+			raise unittest.SkipTest('scan_lvs=0 in config, unit test requires scan_lvs=1')
+		pv_object_path = self.objs[PV_INT][0].object_path
+		if not self.objs[PV_INT][0].Pv.Name.startswith("/dev"):
+			raise unittest.SkipTest('test not running in /dev')
+
+		pv_object_path = self._create_nested(pv_object_path, "nest_0_")
+		pobj = ClientProxy(self.bus, pv_object_path, interfaces=(PV_INT,))
+		pv_device_path = pobj.Pv.Name
+
+		existing = TestDbusService._write_signature(pv_device_path, None)
+		if self._block_present_absent(pv_device_path, False):
+			TestDbusService._write_signature(pv_device_path, existing)
+			self._block_present_absent(pv_device_path, True)
+
+
 	def test_pv_symlinks(self):
 		# Let's take one of our test PVs, pvremove it, find a symlink to it
 		# and re-create using the symlink to ensure we return an object
@@ -2118,6 +2139,9 @@ class TestDbusService(unittest.TestCase):
 
 		if not pv_device_path.startswith("/dev"):
 			raise unittest.SkipTest('test not running in /dev')
+
+		if pv_device_path.startswith("/dev/loop"):
+			raise unittest.SkipTest('not running test against loopback devices')
 
 		self._pv_remove(pv)
 
@@ -2348,9 +2372,16 @@ class TestDbusService(unittest.TestCase):
 				raise e
 
 	def test_z_sigint(self):
+
+		number_of_intervals = 3
+		number_of_lvs = 10
+
 		# Issue SIGINT while daemon is processing work to ensure we shut down.
 		if bool(int(os.getenv("LVM_DBUSD_TEST_SKIP_SIGNAL", "0"))):
 			raise unittest.SkipTest("Skipping as env. LVM_DBUSD_TEST_SKIP_SIGNAL is '1'")
+
+		if g_tmo != 0:
+			raise unittest.SkipTest("Skipping for g_tmo != 0")
 
 		di = DaemonInfo.get()
 		self.assertTrue(di is not None)
@@ -2359,15 +2390,15 @@ class TestDbusService(unittest.TestCase):
 			# we will then issue the creation of the LVs async., wait, then issue a signal
 			# and repeat stepping through the entire time range.
 			start = time.time()
-			vg_proxy = self._create_num_lvs(20)
+			vg_proxy = self._create_num_lvs(number_of_lvs)
 			end = time.time()
 
 			self.handle_return(vg_proxy.Vg.Remove(dbus.Int32(g_tmo), EOD))
 			total = end - start
 
-			for i in range(5):
-				sleep_amt = i * (total/5.0)
-				self._create_num_lvs(20, True)
+			for i in range(number_of_intervals):
+				sleep_amt = i * (total/float(number_of_intervals))
+				self._create_num_lvs(number_of_lvs, True)
 				time.sleep(sleep_amt)
 
 				exited = False
@@ -2408,7 +2439,12 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _wipe_it(block_device):
-		cmd = ["/usr/sbin/wipefs", '-a', block_device]
+		udev_dev = TestDbusService.device_within_devtree(block_device)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		cmd = ["/usr/sbin/wipefs", '-a', udev_dev]
 		config = Popen(cmd, stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
 		config.communicate()
 		if config.returncode != 0:
@@ -2434,19 +2470,46 @@ class TestDbusService(unittest.TestCase):
 			print("Note: Time for udev update = %f" % (time.time() - start))
 		if present:
 			rc = self._lookup(block_device)
-			self.assertNotEqual(rc, '/', "Daemon failed to update, missing udev change event?")
+			self.assertNotEqual(rc, '/', f"Daemon failed to update, block device{block_device} expecting to be"
+										 f"present, missing udev change event?")
 			return True
 		else:
 			rc = self._lookup(block_device)
-			self.assertEqual(rc, '/', "Daemon failed to update, missing udev change event?")
+			self.assertEqual(rc, '/',
+							 f"Daemon failed to update, block device {block_device} should be absent,"
+							 f"missing udev change event?")
 			return True
 
-	def test_wipefs(self):
+
+	@staticmethod
+	def major_minor(device):
+		s = os.lstat(os.path.realpath(device))
+		return os.major(s.st_rdev), os.minor(s.st_rdev)
+
+
+	@staticmethod
+	def device_within_devtree(device):
+		if device.startswith("/dev"):
+			return device
+		in_maj, in_min = TestDbusService.major_minor(device)
+		potential = f"/dev/dm-{in_min}"
+		out_maj, out_min = TestDbusService.major_minor(potential)
+		if in_maj == out_maj and in_min == out_min:
+			return potential
+		return None
+
+
+	def test_udev_wipefs(self):
 		# Ensure we update the status of the daemon if an external process clears a PV
 		pv = self.objs[PV_INT][0]
 		pv_device_path = pv.Pv.Name
 
-		wipe_result = TestDbusService._wipe_it(pv_device_path)
+		udev_dev = TestDbusService.device_within_devtree(pv_device_path)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		wipe_result = TestDbusService._wipe_it(udev_dev)
 		self.assertTrue(wipe_result)
 
 		if wipe_result:
@@ -2459,7 +2522,12 @@ class TestDbusService(unittest.TestCase):
 
 	@staticmethod
 	def _write_signature(device, data=None):
-		fd = os.open(device, os.O_RDWR|os.O_EXCL|os.O_NONBLOCK)
+		udev_dev = TestDbusService.device_within_devtree(device)
+		if udev_dev is None:
+			raise unittest.SkipTest(
+				f"device is not found within /dev tree or unable to resolve to one that does {udev_dev}")
+
+		fd = os.open(udev_dev, os.O_RDWR|os.O_EXCL|os.O_NONBLOCK)
 		existing = os.read(fd, 1024)
 		os.lseek(fd, 0, os.SEEK_SET)
 
@@ -2474,7 +2542,7 @@ class TestDbusService(unittest.TestCase):
 		os.close(fd)
 		return existing
 
-	def test_copy_signature(self):
+	def test_udev_copy_signature(self):
 		# Ensure we update the state of the daemon if an external process copies
 		# a pv signature onto a block device
 		pv = self.objs[PV_INT][0]
