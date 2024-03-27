@@ -68,6 +68,22 @@ if use_session:
 else:
 	bus = dbus.SystemBus(mainloop=DBusGMainLoop())
 
+
+def supports_vdo():
+	cmd = ['segtypes']
+	modprobe = Popen(["modprobe", "kvdo"], stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
+	modprobe.communicate()
+	if modprobe.returncode != 0:
+		return False
+	rc, out, err = call_lvm(cmd)
+	if rc != 0 or "vdo" not in out:
+		return False
+	return True
+
+
+VDO = supports_vdo()
+
+
 # If we have multiple clients we will globally disable introspection
 # validation to limit the massive amount of introspection calls we make as
 # that method prevents things from executing concurrently
@@ -212,18 +228,6 @@ def call_lvm(command):
 	stdout_text = bytes(out[0]).decode("utf-8")
 	stderr_text = bytes(out[1]).decode("utf-8")
 	return process.returncode, stdout_text, stderr_text
-
-
-def supports_vdo():
-	cmd = ['segtypes']
-	modprobe = Popen(["modprobe", "kvdo"], stdout=PIPE, stderr=PIPE, close_fds=True, env=os.environ)
-	modprobe.communicate()
-	if modprobe.returncode != 0:
-		return False
-	rc, out, err = call_lvm(cmd)
-	if rc != 0 or "vdo" not in out:
-		return False
-	return True
 
 
 def process_exists(name):
@@ -426,7 +430,7 @@ class TestDbusService(unittest.TestCase):
 
 		self.addCleanup(self.clean_up)
 
-		self.vdo = supports_vdo()
+		self.vdo = VDO
 		remove_lvm_debug()
 
 	def _recurse_vg_delete(self, vg_proxy, pv_proxy, nested_pv_hash):
